@@ -1,0 +1,41 @@
+name: Pomodoro CI Pipeline
+
+# Start this pipeline every time code is pushed or a pull request is made to the main branches
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    # Virtual OS (Ubuntu Linux) the workflow runner will execute in
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Step: Pull the latest code from GitHub into the runner environment
+    - name: Clone Code
+      uses: actions/checkout@v4
+
+    # 2. Step: Install Python 3.11 inside the runner environment
+    - name: Prepare Python Environment
+      uses: actions/setup-python@v5
+      with:
+        python-python-version: '3.11'
+
+    # 3. Step: Install all libraries listed in requirements.txt into the runner
+    - name: Set Requirements
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 4. Step: Check for syntax errors or typos (Linting)
+    - name: Code Quality and Syntax Control
+      run: |
+        # Checks if there is a fatal error in the Python code (SyntaxError)
+        python -m compileall .
+
+    # 5. Step: Test if the Docker architecture builds without errors
+    - name: Docker Compose Build Test
+      run: |
+        docker compose build

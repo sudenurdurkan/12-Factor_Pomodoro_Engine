@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>12-Factor Pomodoro Engine</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            text-align: center;
+            width: 350px;
+            margin-bottom: 20px;
+        }
+        h1 { color: #2c3e50; font-size: 24px; margin-bottom: 5px; }
+        .subtitle { color: #7f8c8d; font-size: 12px; margin-bottom: 25px; }
+        .timer { font-size: 64px; font-weight: bold; color: #e74c3c; margin: 15px 0; font-variant-numeric: tabular-nums; }
+        .status-text { font-size: 16px; color: #34495e; font-weight: 500; height: 24px; }
+        
+        input {
+            width: 95%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #dcdde1;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover { background: #27ae60; }
+        .stop-btn { background: #e74c3c; }
+        .stop-btn:hover { background: #c0392b; }
+        .secondary-btn { background: #34495e; margin-top: 8px; }
+        .secondary-btn:hover { background: #2c3e50; }
+        
+        /* Confirmation Box Design */
+        .confirm-box {
+            background: #fff3f3;
+            border: 1px dashed #e74c3c;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .confirm-text { color: #c0392b; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+        .confirm-buttons { display: flex; gap: 10px; }
+        .confirm-buttons button { margin: 0; padding: 8px; font-size: 14px; }
+        
+        .auth-toggle { margin-top: 15px; font-size: 13px; color: #3498db; cursor: pointer; }
+        .user-badge { font-size: 14px; color: #2c3e50; background: #edf2f7; padding: 5px 12px; border-radius: 20px; display: inline-block; margin-bottom: 15px; }
+        .logout-btn { background: none; color: #e74c3c; border: none; cursor: pointer; font-size: 12px; text-decoration: underline; margin-left: 10px; width: auto; display: inline; }
+        
+        .stats-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); width: 370px; max-height: 250px; overflow-y: auto; text-align: left; }
+        .stats-title { font-weight: bold; color: #2c3e50; margin-bottom: 10px; border-bottom: 2px solid #edf2f7; padding-bottom: 5px; }
+        .stats-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #edf2f7; font-size: 14px; }
+        
+        .hidden { display: none !important; }
+        .duration-label { font-size: 13px; color: #7f8c8d; text-align: left; display: block; margin-top: 10px; width: 100%;}
+    </style>
+</head>
+<body>
+
+<div class="container" id="authBox">
+    <h1 id="authTitle">Sign In</h1>
+    <div class="subtitle">Secure access to Pomodoro Engine</div>
+    <input type="text" id="usernameInput" placeholder="Username">
+    <input type="password" id="passwordInput" placeholder="Password">
+    <button id="authBtn" onclick="handleAuth()">Sign In</button>
+    <div class="auth-toggle" id="toggleAuthMode" onclick="toggleAuthMode()">Don't have an account? Sign Up</div>
+</div>
+
+<div class="container hidden" id="appBox">
+    <div>
+        <span class="user-badge">👤 <span id="userSpan"></span></span>
+        <button class="logout-btn" onclick="logout()">Log Out</button>
+    </div>
+    <h1>Pomodoro Engine</h1>
+    
+    <label class="duration-label">Select Focus Duration (Minutes):</label>
+    <input type="number" id="durationSelect" min="1" max="60" value="25">
+    
+    <div class="timer" id="timerDisplay">25:00</div>
+    <div class="status-text" id="statusText">System Ready</div>
+
+    <button id="startBtn" onclick="startPomodoro()">Start Focus Session</button>
+    <button id="stopBtn" class="stop-btn hidden" onclick="askToStopPomodoro()">Stop Focus Session</button>
+
+    <div class="confirm-box hidden" id="confirmBox">
+        <div class="confirm-text">Are you sure you want to stop the Pomodoro?</div>
+        <div class="confirm-buttons">
+            <button onclick="confirmStop(true)" style="background: #e74c3c;">Yes</button>
+            <button onclick="confirmStop(false)" style="background: #7f8c8d;">No</button>
+        </div>
+    </div>
+
+    <button class="secondary-btn" onclick="toggleStatsPanel()">Show Daily Statistics</button>
+</div>
+
+<div class="stats-panel hidden" id="statsPanel">
+    <div class="stats-title">Daily Focus History</div>
+    <div style="width: 100%; margin-bottom: 15px;">
+        <canvas id="pomodoroChart" width="350" height="200"></canvas>
+    </div>
+    <div id="statsContainer"></div>
+</div>
+
+<script>
+    let CURRENT_USER = localStorage.getItem('pomodoro_user') || null;
+    let isLoginMode = true;
+    let checkInterval = null;
+    let hasNotificationPermission = false;
+    let audioCtx = null;
+    let myChart = null;
+
+    if ("Notification" in window) {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") hasNotificationPermission = true;
+        });
+    }
+
+    function unlockAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playDingSound() {
+        try {
+            unlockAudio();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); 
+            gainNode.gain.setValueAtTime(0.6, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5); 
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.5);
+        } catch (e) { console.error(e); }
+    }
+
+    function toggleAuthMode() {
+        isLoginMode = !isLoginMode;
+        document.getElementById('authTitle').innerText = isLoginMode ? "Sign In" : "Sign Up";
+        document.getElementById('authBtn').innerText = isLoginMode ? "Sign In" : "Sign Up";
+        document.getElementById('toggleAuthMode').innerText = isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In";
+    }
+
+    async function handleAuth() {
+        const u = document.getElementById('usernameInput').value;
+        const p = document.getElementById('passwordInput').value;
+        const url = isLoginMode ? '/login' : '/register';
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            if (isLoginMode) {
+                localStorage.setItem('pomodoro_user', u);
+                CURRENT_USER = u;
+                showApp();
+            } else {
+                alert("Registration successful! You can now log in.");
+                toggleAuthMode();
+            }
+        } else { alert(data.message || "An error occurred during authentication."); }
+    }
+
+    function showApp() {
+        document.getElementById('authBox').classList.add('hidden');
+        document.getElementById('appBox').classList.remove('hidden');
+        document.getElementById('userSpan').innerText = CURRENT_USER;
+        checkStatus();
+        if(!checkInterval) checkInterval = setInterval(checkStatus, 1000);
+        loadDetailedStats();
+    }
+
+    function logout() {
+        localStorage.removeItem('pomodoro_user');
+        CURRENT_USER = null;
+        clearInterval(checkInterval);
+        checkInterval = null;
+        document.getElementById('appBox').classList.add('hidden');
+        document.getElementById('statsPanel').classList.add('hidden');
+        document.getElementById('authBox').classList.remove('hidden');
+    }
+
+    async function startPomodoro() {
+        unlockAudio();
+        const durationInput = document.getElementById('durationSelect').value;
+        await fetch('/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: CURRENT_USER, duration_minutes: durationInput })
+        });
+    }
+
+    function askToStopPomodoro() {
+        document.getElementById('confirmBox').classList.remove('hidden');
+    }
+
+    async function confirmStop(isSure) {
+        document.getElementById('confirmBox').classList.add('hidden');
+        if (!isSure) return; 
+
+        const response = await fetch('/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: CURRENT_USER })
+        });
+        const data = await response.json();
+        
+        if(data.saved) {
+            alert(`Pomodoro stopped. Your past ${data.elapsed_minutes} minutes of focus time have been successfully added to your history!`);
+        } else {
+            alert("Pomodoro stopped. Since you focused for less than 1 minute, the session was not added to statistics.");
+        }
+        loadDetailedStats();
+    }
+
+    async function checkStatus() {
+        if(!CURRENT_USER) return;
+        const response = await fetch(`/status?user_id=${CURRENT_USER}`);
+        const data = await response.json();
+        
+        const timerDisplay = document.getElementById('timerDisplay');
+        const statusText = document.getElementById('statusText');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const durationSelect = document.getElementById('durationSelect');
+
+        if (data.status === 'idle') {
+            const currentSelected = durationSelect.value;
+            timerDisplay.innerText = `${currentSelected < 10 ? '0' : ''}${currentSelected}:00`;
+            statusText.innerText = "System Ready";
+            timerDisplay.style.color = '#e74c3c';
+            
+            startBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+            durationSelect.disabled = false;
+        } else if (data.status === 'active') {
+            let secs = data.remaining_seconds;
+            let displayMins = Math.floor(secs / 60);
+            let displaySecs = secs % 60;
+            timerDisplay.innerText = `${displayMins < 10 ? '0' : ''}${displayMins}:${displaySecs < 10 ? '0' : ''}${displaySecs}`;
+            statusText.innerText = "Focusing Time!";
+            timerDisplay.style.color = '#2980b9';
+            
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            durationSelect.disabled = true;
+        } else if (data.status === 'completed_and_saved_to_db') {
+            timerDisplay.innerText = "00:00";
+            statusText.innerText = "Congratulations!";
+            timerDisplay.style.color = '#2ecc71';
+            
+            startBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+            durationSelect.disabled = false;
+            document.getElementById('confirmBox').classList.add('hidden');
+
+            playDingSound();
+            if (hasNotificationPermission) {
+                new Notification("Pomodoro Finished!", {
+                    body: "Great job! A focus session has been completed. Enjoy your break!",
+                    icon: "https://cdn-icons-png.flaticon.com/512/3237/3237464.png"
+                });
+            }
+            loadDetailedStats();
+        }
+    }
+
+    async function loadDetailedStats() {
+        if(!CURRENT_USER) return;
+        const response = await fetch(`/stats?user_id=${CURRENT_USER}`);
+        const data = await response.json();
+        const container = document.getElementById('statsContainer');
+        container.innerHTML = "";
+        
+        if(data.length === 0) {
+            container.innerHTML = "<div style='color:#7f8c8d; font-size:13px;'>No completed sessions recorded yet.</div>";
+            return;
+        }
+
+        data.forEach(row => {
+            const div = document.createElement('div');
+            div.className = 'stats-row';
+            div.innerHTML = `<span>📅 ${row.date}</span> <span>⏱️ <strong>${row.total_minutes} mins</strong></span>`;
+            container.appendChild(div);
+        });
+
+        const ctx = document.getElementById('pomodoroChart').getContext('2d');
+        const labels = data.map(row => row.date);
+        const minutesData = data.map(row => row.total_minutes);
+
+        if(myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Daily Focus (Minutes)',
+                    data: minutesData,
+                    backgroundColor: '#3498db',
+                    borderColor: '#2980b9',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    function toggleStatsPanel() {
+        const panel = document.getElementById('statsPanel');
+        panel.classList.toggle('hidden');
+        if(!panel.classList.contains('hidden')) loadDetailedStats();
+    }
+
+    if (CURRENT_USER) showApp();
+</script>
+</body>
+</html>

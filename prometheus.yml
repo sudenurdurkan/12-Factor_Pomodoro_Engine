@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s 
+
+scrape_configs:
+  - job_name: 'pomodoro-flask-app'
+    static_configs:
+      - targets: ['web:5000'] # Name and port of Flask container inside Docker web

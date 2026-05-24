@@ -1,0 +1,6 @@
+flask==3.0.2
+python-dotenv==1.0.1
+redis==5.0.3
+psycopg2-binary==2.9.9
+Flask-SQLAlchemy==3.1.1
+prometheus-flask-exporter==0.23.0

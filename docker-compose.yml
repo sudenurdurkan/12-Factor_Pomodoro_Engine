@@ -1,0 +1,53 @@
+services:
+  # Flask App
+  web:
+    build: .
+    container_name: pomodoro_flask
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_PORT=5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DATABASE_URL=postgresql://pomodoro_user:pomodoro_pass@db:5432/pomodoro_db
+    depends_on:
+      - redis
+      - db
+
+  # Temporary Memory (Redis)
+  redis:
+    image: redis:7.2-alpine
+    container_name: pomodoro_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # Permanent Memory (PostgreSQL)
+  db:
+    image: postgres:16-alpine
+    container_name: pomodoro_db
+    environment:
+      POSTGRES_USER: pomodoro_user
+      POSTGRES_PASSWORD: pomodoro_pass
+      POSTGRES_DB: pomodoro_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  # Monitoring System (Prometheus)
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: pomodoro_prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
