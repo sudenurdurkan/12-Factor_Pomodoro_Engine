@@ -28,7 +28,7 @@ redis_client = redis.Redis(
     port=int(os.getenv('REDIS_PORT', 6379)),
     password=os.getenv('REDIS_PASSWORD', None),
     ssl=use_ssl,                      # True in cloud, False in local
-    ssl_cert_reqs=None if use_ssl else 'required', # Prevents cloud certificate errors
+    ssl_cert_reqs='none' if use_ssl else 'required', # Prevents cloud certificate errors
     decode_responses=True
 )
 

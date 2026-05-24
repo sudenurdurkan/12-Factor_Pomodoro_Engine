@@ -100,7 +100,7 @@
     <h1>Pomodoro Engine</h1>
     
     <label class="duration-label">Select Focus Duration (Minutes):</label>
-    <input type="number" id="durationSelect" min="1" max="60" value="25">
+    <input type="number" id="durationSelect" min="1" max="60" value="25" oninput="updateTimerDisplay()">
     
     <div class="timer" id="timerDisplay">25:00</div>
     <div class="status-text" id="statusText">System Ready</div>
@@ -245,55 +245,81 @@
         loadDetailedStats();
     }
 
+    function updateTimerDisplay() {
+        const timerDisplay = document.getElementById('timerDisplay');
+        const durationSelect = document.getElementById('durationSelect');
+        const startBtn = document.getElementById('startBtn');
+        
+        // If timer is not actively counting down (start button is visible) make the visible timer the same as entered value.
+        if (!startBtn.classList.contains('hidden')) {
+            const currentSelected = durationSelect.value;
+            if (currentSelected >= 1 && currentSelected <= 60) {
+                timerDisplay.innerText = `${currentSelected < 10 ? '0' : ''}${currentSelected}:00`;
+            }
+        }
+    }
+
     async function checkStatus() {
         if(!CURRENT_USER) return;
-        const response = await fetch(`/status?user_id=${CURRENT_USER}`);
-        const data = await response.json();
-        
-        const timerDisplay = document.getElementById('timerDisplay');
-        const statusText = document.getElementById('statusText');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const durationSelect = document.getElementById('durationSelect');
-
-        if (data.status === 'idle') {
-            const currentSelected = durationSelect.value;
-            timerDisplay.innerText = `${currentSelected < 10 ? '0' : ''}${currentSelected}:00`;
-            statusText.innerText = "System Ready";
-            timerDisplay.style.color = '#e74c3c';
+        try {
+            const response = await fetch(`/status?user_id=${CURRENT_USER}`);
             
-            startBtn.classList.remove('hidden');
-            stopBtn.classList.add('hidden');
-            durationSelect.disabled = false;
-        } else if (data.status === 'active') {
-            let secs = data.remaining_seconds;
-            let displayMins = Math.floor(secs / 60);
-            let displaySecs = secs % 60;
-            timerDisplay.innerText = `${displayMins < 10 ? '0' : ''}${displayMins}:${displaySecs < 10 ? '0' : ''}${displaySecs}`;
-            statusText.innerText = "Focusing Time!";
-            timerDisplay.style.color = '#2980b9';
-            
-            startBtn.classList.add('hidden');
-            stopBtn.classList.remove('hidden');
-            durationSelect.disabled = true;
-        } else if (data.status === 'completed_and_saved_to_db') {
-            timerDisplay.innerText = "00:00";
-            statusText.innerText = "Congratulations!";
-            timerDisplay.style.color = '#2ecc71';
-            
-            startBtn.classList.remove('hidden');
-            stopBtn.classList.add('hidden');
-            durationSelect.disabled = false;
-            document.getElementById('confirmBox').classList.add('hidden');
-
-            playDingSound();
-            if (hasNotificationPermission) {
-                new Notification("Pomodoro Finished!", {
-                    body: "Great job! A focus session has been completed. Enjoy your break!",
-                    icon: "https://cdn-icons-png.flaticon.com/512/3237/3237464.png"
-                });
+            // If backend gices an error, put a warning on screen and stop
+            if (!response.ok) {
+                document.getElementById('statusText').innerText = "Connecting to server...";
+                return;
             }
-            loadDetailedStats();
+            
+            const data = await response.json();
+            
+            const timerDisplay = document.getElementById('timerDisplay');
+            const statusText = document.getElementById('statusText');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const durationSelect = document.getElementById('durationSelect');
+
+            if (data.status === 'idle') {
+                if (document.getElementById('confirmBox').classList.contains('hidden')) {
+                    updateTimerDisplay(); // Update timer display with user's desired value
+                    statusText.innerText = "System Ready";
+                }
+                timerDisplay.style.color = '#e74c3c';
+                startBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+                durationSelect.disabled = false;
+            } else if (data.status === 'active') {
+                let secs = data.remaining_seconds;
+                let displayMins = Math.floor(secs / 60);
+                let displaySecs = secs % 60;
+                timerDisplay.innerText = `${displayMins < 10 ? '0' : ''}${displayMins}:${displaySecs < 10 ? '0' : ''}${displaySecs}`;
+                statusText.innerText = "Focusing Time!";
+                timerDisplay.style.color = '#2980b9';
+                
+                startBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+                durationSelect.disabled = true;
+            } else if (data.status === 'completed_and_saved_to_db') {
+                timerDisplay.innerText = "00:00";
+                statusText.innerText = "Congratulations!";
+                timerDisplay.style.color = '#2ecc71';
+                
+                startBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+                durationSelect.disabled = false;
+                document.getElementById('confirmBox').classList.add('hidden');
+
+                playDingSound();
+                if (hasNotificationPermission) {
+                    new Notification("Pomodoro Finished!", {
+                        body: "Great job! A focus session has been completed. Enjoy your break!",
+                        icon: "https://cdn-icons-png.flaticon.com/512/3237/3237464.png"
+                    });
+                }
+                loadDetailedStats();
+            }
+        } catch (error) {
+            console.error("Status fetch failed:", error);
+            document.getElementById('statusText').innerText = "Network link lost...";
         }
     }
 
