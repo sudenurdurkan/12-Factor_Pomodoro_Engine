@@ -17,18 +17,20 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Redis Settings
-redis_url = os.getenv('REDIS_URL')
+# Redis Configuration (Automatic Cloud SSL)
+redis_host = os.getenv('REDIS_HOST', 'localhost')
 
-if redis_url:
-    redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
-else:
-    redis_client = redis.Redis(
-        host=os.getenv('REDIS_HOST', 'localhost'),
-        port=int(os.getenv('REDIS_PORT', 6379)),
-        password = os.getenv('REDIS_PASSWORD', None),
-        decode_responses=True
-    )
+# Activate SSL if access is not in local host (different cloud address other than 'redis' or 'localhost' inside Docker)
+use_ssl = redis_host not in ['localhost', 'redis']
+
+redis_client = redis.Redis(
+    host=redis_host,
+    port=int(os.getenv('REDIS_PORT', 6379)),
+    password=os.getenv('REDIS_PASSWORD', None),
+    ssl=use_ssl,                      # True in cloud, False in local
+    ssl_cert_reqs=None if use_ssl else 'required', # Prevents cloud certificate errors
+    decode_responses=True
+)
 
 # Prometheus Metrics
 HTTP_REQUESTS_TOTAL = Counter('http_requests_total', 'Total HTTP Requests', ['method', 'endpoint'])
